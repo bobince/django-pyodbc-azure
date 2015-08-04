@@ -535,6 +535,15 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                     "name": self.quote_name(pk_name),
                 }
             )
+        # Drop default, SQL Server treats defaults as constraints requiring explicit deletion
+        for default_name in self._default_constraint_names(model, [field.column]):
+            sql = self.sql_alter_column % {
+                "table": self.quote_name(model._meta.db_table),
+                "changes": self.sql_alter_column_no_default % {
+                    "name": self.quote_name(default_name),
+                }
+            }
+            self.execute(sql)
         # Delete the column
         sql = self.sql_delete_column % {
             "table": self.quote_name(model._meta.db_table),
@@ -544,3 +553,13 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         # Reset connection if required
         if self.connection.features.connection_persists_old_columns:
             self.connection.close()
+
+    def _default_constraint_names(self, model, column_names):
+        """Returns default constraint names matching the columns"""
+        # As BaseDatabaseSchemaEditor._constraint_names doesn't know about defaults
+        with self.connection.cursor() as cursor:
+            constraints = self.connection.introspection.get_constraints(cursor, model._meta.db_table)
+        return [
+            name for name, infodict in constraints.items()
+            if infodict["columns"] == column_names and infodict.get("default")
+        ]

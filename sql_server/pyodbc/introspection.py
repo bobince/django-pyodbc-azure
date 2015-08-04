@@ -258,6 +258,7 @@ AND t.name = %s"""
                     "foreign_key": (ref_table, ref_column) if kind.lower() == "foreign key" else None,
                     "check": False,
                     "index": False,
+                    "default": False,
                 }
             # Record the details
             constraints[constraint]['columns'].append(column)
@@ -283,6 +284,7 @@ AND t.name = %s"""
                     "foreign_key": None,
                     "check": True,
                     "index": False,
+                    "default": False,
                 }
             # Record the details
             constraints[constraint]['columns'].append(column)
@@ -321,9 +323,32 @@ AND t.name = %s"""
                     "foreign_key": None,
                     "check": False,
                     "index": True,
+                    "default": False,
                 }
             indexes[index]["columns"].append(column)
         for index, constraint in indexes.items():
             if index not in constraints:
                 constraints[index] = constraint
+        # Now get DEFAULT constraint columns
+        cursor.execute("""
+            SELECT
+                [name],
+                COL_NAME([parent_object_id], [parent_column_id])
+            FROM
+                [sys].[default_constraints]
+            WHERE
+                OBJECT_NAME([parent_object_id]) = %s
+        """, [table_name])
+        for constraint, column in cursor.fetchall():
+            if constraint not in constraints:
+                constraints[constraint] = {
+                    "columns": [],
+                    "primary_key": False,
+                    "unique": False,
+                    "foreign_key": None,
+                    "check": False,
+                    "index": False,
+                    "default": True,
+                }
+            constraints[constraint]['columns'].append(column)
         return constraints
