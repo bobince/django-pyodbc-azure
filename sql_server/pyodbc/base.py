@@ -233,19 +233,19 @@ class DatabaseWrapper(BaseDatabaseWrapper):
                 options.get('host_is_server', False):
                 if port:
                     host += ';PORT=%s' % port
-                cstr_parts.append('SERVER=%s' % host)
+                cstr_parts.append('SERVER=%s' % self.encode_cstr(host))
             else:
-                cstr_parts.append('SERVERNAME=%s' % host)
+                cstr_parts.append('SERVERNAME=%s' % self.encode_cstr(host))
 
         if user:
-            cstr_parts.append('UID=%s;PWD=%s' % (user, password))
+            cstr_parts.append('UID=%s;PWD=%s' % (self.encode_cstr(user), self.encode_cstr(password)))
         else:
             if ms_drivers.match(driver):
                 cstr_parts.append('Trusted_Connection=yes')
             else:
                 cstr_parts.append('Integrated Security=SSPI')
 
-        cstr_parts.append('DATABASE=%s' % database)
+        cstr_parts.append('DATABASE=%s' % self.encode_cstr(database))
 
         if ms_drivers.match(driver) and not driver == 'SQL Server':
             self.supports_mars = True
@@ -291,6 +291,13 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             conn.commit()
 
         return conn
+
+    @staticmethod
+    def encode_cstr(v):
+        """Encode strings as per rules documented in [MS-ODBCSTR]"""
+        if ';' in v or v.strip(' ').startswith('{'):
+            return '{%s}' % (v.replace('}', '}}'),)
+        return v
 
     def init_connection_state(self):
         if self.sql_server_version < 2008:
